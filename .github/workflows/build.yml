@@ -1,0 +1,55 @@
+name: Build RC Car
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ekstrak proyek
+        run: unzip -q -o project.zip -d proj
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        working-directory: proj/android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Siapkan arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Build firmware ESP32-C3
+        continue-on-error: true
+        run: |
+          URL=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index --additional-urls $URL
+          arduino-cli core install esp32:esp32@2.0.17 --additional-urls $URL
+          arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc --output-dir fw proj/firmware/rc_car
+
+      - name: Kumpulkan hasil
+        run: |
+          mkdir -p out
+          cp proj/android/app/build/outputs/apk/debug/app-debug.apk out/RC-Car.apk
+          cp fw/rc_car.ino.merged.bin out/firmware-esp32c3.bin || true
+
+      - name: Terbitkan di Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: RC Car build ${{ github.run_number }}
+          files: out/*
