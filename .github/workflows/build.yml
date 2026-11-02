@@ -40,12 +40,17 @@ jobs:
           arduino-cli core update-index --additional-urls $URL
           arduino-cli core install esp32:esp32@2.0.17 --additional-urls $URL
           arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc --output-dir fw proj/firmware/rc_car
+          ls -la fw
+          PIP_BREAK_SYSTEM_PACKAGES=1 pip install "esptool==4.8.1"
+          BOOT=$(find ~/.arduino15 -name boot_app0.bin | head -n 1)
+          echo "boot_app0: $BOOT"
+          esptool.py --chip esp32c3 merge_bin -o fw/firmware-merged.bin --flash_mode dio --flash_freq 80m --flash_size 4MB 0x0 fw/rc_car.ino.bootloader.bin 0x8000 fw/rc_car.ino.partitions.bin 0xe000 "$BOOT" 0x10000 fw/rc_car.ino.bin
 
       - name: Kumpulkan hasil
         run: |
           mkdir -p out
           cp proj/android/app/build/outputs/apk/debug/app-debug.apk out/RC-Car.apk
-          cp fw/rc_car.ino.merged.bin out/firmware-esp32c3.bin || true
+          cp fw/firmware-merged.bin out/firmware-esp32c3.bin || true
 
       - name: Terbitkan di Releases
         uses: softprops/action-gh-release@v2
